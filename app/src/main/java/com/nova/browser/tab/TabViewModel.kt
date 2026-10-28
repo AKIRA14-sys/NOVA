@@ -119,15 +119,20 @@ class TabViewModel(application: Application) : AndroidViewModel(application) {
         val parsedUrl = UrlUtils.parseInput(input, _currentSearchEngine.value)
         if (parsedUrl.isEmpty()) return
 
-        updateTab(activeId) { tab ->
-            try {
-                if (!tab.geckoSession.isOpen) {
-                    tab.geckoSession.open(runtime)
-                }
-                tab.geckoSession.loadUri(parsedUrl)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to navigate to $parsedUrl", e)
+        val currentTab = _tabs.value.find { it.id == activeId } ?: return
+
+        // Perform the actual load outside the state transform
+        try {
+            if (!currentTab.geckoSession.isOpen) {
+                currentTab.geckoSession.open(runtime)
             }
+            currentTab.geckoSession.loadUri(parsedUrl)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to navigate to $parsedUrl", e)
+        }
+
+        // Now update the UI state
+        updateTab(activeId) { tab ->
             tab.copy(
                 url = parsedUrl,
                 title = parsedUrl,
