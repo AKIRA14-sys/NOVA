@@ -1,5 +1,6 @@
 # GeckoView ProGuard rules
 -keep class org.mozilla.geckoview.** { *; }
+-keep interface org.mozilla.geckoview.** { *; }
 -dontwarn org.mozilla.geckoview.**
 
 # Jetpack Compose ProGuard rules

@@ -1,6 +1,7 @@
 package com.nova.browser.tab
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import com.nova.browser.engine.GeckoEngineManager
 import com.nova.browser.search.SearchEngine
@@ -14,6 +15,8 @@ import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.WebRequestError
 import java.util.UUID
+
+private const val TAG = "TabViewModel"
 
 class TabViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -44,7 +47,11 @@ class TabViewModel(application: Application) : AndroidViewModel(application) {
         val tabId = UUID.randomUUID().toString()
         val session = GeckoSession()
 
-        session.open(runtime)
+        try {
+            session.open(runtime)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error opening GeckoSession with runtime", e)
+        }
 
         val isHome = initialUrl.isEmpty()
         val title = if (isHome) "NOVA Home" else initialUrl
@@ -64,7 +71,11 @@ class TabViewModel(application: Application) : AndroidViewModel(application) {
 
         if (initialUrl.isNotEmpty()) {
             val targetUrl = UrlUtils.parseInput(initialUrl, _currentSearchEngine.value)
-            session.loadUri(targetUrl)
+            try {
+                session.loadUri(targetUrl)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading initial URL $targetUrl", e)
+            }
         }
 
         return tabId
@@ -80,7 +91,13 @@ class TabViewModel(application: Application) : AndroidViewModel(application) {
         val currentList = _tabs.value
         val targetTab = currentList.find { it.id == tabId } ?: return
 
-        targetTab.geckoSession.close()
+        try {
+            if (targetTab.geckoSession.isOpen) {
+                targetTab.geckoSession.close()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing GeckoSession for tab $tabId", e)
+        }
 
         val updatedList = currentList.filter { it.id != tabId }
 
@@ -103,7 +120,14 @@ class TabViewModel(application: Application) : AndroidViewModel(application) {
         if (parsedUrl.isEmpty()) return
 
         updateTab(activeId) { tab ->
-            tab.geckoSession.loadUri(parsedUrl)
+            try {
+                if (!tab.geckoSession.isOpen) {
+                    tab.geckoSession.open(runtime)
+                }
+                tab.geckoSession.loadUri(parsedUrl)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to navigate to $parsedUrl", e)
+            }
             tab.copy(
                 url = parsedUrl,
                 title = parsedUrl,
@@ -115,24 +139,38 @@ class TabViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun goBack() {
-        activeTab?.let { tab ->
-            tab.geckoSession.goBack()
+        val tab = activeTab ?: return
+        try {
+            if (tab.geckoSession.isOpen) {
+                tab.geckoSession.goBack()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error performing goBack", e)
         }
     }
 
     fun goForward() {
-        activeTab?.let { tab ->
-            tab.geckoSession.goForward()
+        val tab = activeTab ?: return
+        try {
+            if (tab.geckoSession.isOpen) {
+                tab.geckoSession.goForward()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error performing goForward", e)
         }
     }
 
     fun refresh() {
-        activeTab?.let { tab ->
-            if (tab.isHome) {
-                // If home, re-trigger home view state
-                updateTab(tab.id) { it.copy(isLoading = false, error = null) }
-            } else {
-                tab.geckoSession.reload()
+        val tab = activeTab ?: return
+        if (tab.isHome) {
+            updateTab(tab.id) { it.copy(isLoading = false, error = null) }
+        } else {
+            try {
+                if (tab.geckoSession.isOpen) {
+                    tab.geckoSession.reload()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error reloading session", e)
             }
         }
     }
@@ -154,6 +192,7 @@ class TabViewModel(application: Application) : AndroidViewModel(application) {
     private fun setupSessionListeners(tabId: String, session: GeckoSession) {
         session.progressDelegate = object : GeckoSession.ProgressDelegate {
             override fun onPageStart(session: GeckoSession, url: String) {
+                Log.d(TAG, "onPageStart: $url")
                 updateTab(tabId) { tab ->
                     tab.copy(
                         url = url,
@@ -166,6 +205,7 @@ class TabViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             override fun onPageStop(session: GeckoSession, success: Boolean) {
+                Log.d(TAG, "onPageStop success=$success")
                 updateTab(tabId) { tab ->
                     tab.copy(isLoading = false, progress = 100)
                 }
@@ -180,6 +220,7 @@ class TabViewModel(application: Application) : AndroidViewModel(application) {
 
         session.navigationDelegate = object : GeckoSession.NavigationDelegate {
             override fun onLocationChange(session: GeckoSession, url: String?, perms: List<GeckoSession.PermissionDelegate.ContentPermission>) {
+                Log.d(TAG, "onLocationChange: $url")
                 if (!url.isNullOrEmpty()) {
                     updateTab(tabId) { tab ->
                         tab.copy(url = url, isHome = false)
@@ -200,6 +241,7 @@ class TabViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             override fun onLoadError(session: GeckoSession, uri: String?, error: WebRequestError): GeckoResult<String>? {
+                Log.w(TAG, "onLoadError for $uri: ${error.code}")
                 val errorMsg = "Failed to load page (${error.code})"
                 updateTab(tabId) { tab ->
                     tab.copy(isLoading = false, error = errorMsg)
@@ -230,7 +272,13 @@ class TabViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         _tabs.value.forEach { tab ->
-            tab.geckoSession.close()
+            try {
+                if (tab.geckoSession.isOpen) {
+                    tab.geckoSession.close()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error closing GeckoSession on clear", e)
+            }
         }
     }
 }
