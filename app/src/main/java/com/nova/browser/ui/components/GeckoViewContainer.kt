@@ -36,11 +36,20 @@ fun GeckoViewContainer(
                 }
             },
             update = { geckoView ->
-                Log.d(TAG, "Attaching session $geckoSession to GeckoView")
-                try {
-                    geckoView.setSession(geckoSession)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error setting GeckoSession on GeckoView", e)
+                // Crucial fix: Only call setSession if the session is not already attached.
+                // Recompositions (such as soft keyboard appearance on search bar tap) trigger
+                // update; calling setSession on an already-attached session causes GeckoView
+                // to throw IllegalStateException and crash.
+                if (geckoView.session != geckoSession) {
+                    Log.d(TAG, "Attaching session $geckoSession to GeckoView")
+                    try {
+                        if (geckoView.session != null) {
+                            geckoView.releaseSession()
+                        }
+                        geckoView.setSession(geckoSession)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error setting GeckoSession on GeckoView", e)
+                    }
                 }
             },
             onRelease = { geckoView ->
