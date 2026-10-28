@@ -1,8 +1,11 @@
 package com.nova.browser.engine
 
 import android.content.Context
+import android.util.Log
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoRuntimeSettings
+
+private const val TAG = "GeckoEngineManager"
 
 object GeckoEngineManager {
     @Volatile
@@ -15,8 +18,16 @@ object GeckoEngineManager {
     }
 
     private fun createRuntime(context: Context): GeckoRuntime {
-        val settings = GeckoRuntimeSettings.Builder()
-            .build()
-        return GeckoRuntime.create(context, settings)
+        Log.i(TAG, "Initializing GeckoRuntime singleton...")
+        return try {
+            val settings = GeckoRuntimeSettings.Builder()
+                .build()
+            GeckoRuntime.create(context, settings).also {
+                Log.i(TAG, "GeckoRuntime successfully created.")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create GeckoRuntime!", e)
+            throw e
+        }
     }
 }
