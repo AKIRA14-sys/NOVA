@@ -6,7 +6,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -52,7 +51,10 @@ fun MainBrowserScreen(viewModel: TabViewModel) {
     val activeTabId by viewModel.activeTabId.collectAsState()
     val currentSearchEngine by viewModel.currentSearchEngine.collectAsState()
 
-    val activeTab = viewModel.activeTab
+    // Reactively derive activeTab whenever tabs or activeTabId changes
+    val activeTab = remember(tabs, activeTabId) {
+        tabs.find { it.id == activeTabId }
+    }
 
     var showTabSwitcher by remember { mutableStateOf(false) }
 
